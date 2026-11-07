@@ -23,7 +23,8 @@
 | 全局异常处理 | ✅ 已完成 |
 | 健康检查接口 | ✅ 已完成 |
 | CI 构建流水线 | ✅ 已完成 |
-| 用户注册 / 登录 / 鉴权 | 🚧 规划中 |
+| 用户注册接口（BCrypt 加密） | ✅ 已完成 |
+| 用户登录 / JWT 鉴权 | 🚧 规划中 |
 | WebSocket 长连接、消息收发 | 🚧 规划中 |
 | 会话与消息持久化 | 🚧 规划中 |
 
@@ -42,6 +43,8 @@
 | Hutool | 5.8.27 | 通用工具集 |
 | Lombok | 随 Boot 托管 | 简化 POJO |
 | spring-security-crypto | 随 Boot 托管 | 密码加密（BCrypt），不引入完整 Security 框架 |
+| Spring Data Redis | 随 Boot 托管 | 缓存与会话状态（模块开发中） |
+| JJWT | 0.11.5 | JWT 签发与校验（模块开发中） |
 | Maven | 3.9+ | 构建 |
 
 ---
@@ -68,8 +71,21 @@ yunjian-server
     │   │   └── result                # 统一响应
     │   │       ├── Result.java               # 响应封装
     │   │       └── ResultCode.java           # 错误码枚举
-    │   └── controller                # Web 层
-    │       └── HealthController.java
+    │   ├── config                    # 框架配置
+    │   │   └── MyMetaObjectHandler.java      # 公共字段自动填充
+    │   ├── controller                # Web 层
+    │   │   ├── AuthController.java           # 认证：注册
+    │   │   └── HealthController.java         # 健康检查
+    │   ├── dto                       # 入参传输对象
+    │   │   └── UserRegisterDTO.java
+    │   ├── entity                    # 数据库实体（DO）
+    │   │   └── User.java
+    │   ├── mapper                    # DAO 层
+    │   │   └── UserMapper.java
+    │   ├── service                   # Service 层
+    │   │   ├── UserService.java
+    │   │   └── impl/UserServiceImpl.java
+    │   └── vo                        # 出参展示对象
     └── resources
         └── application.yml
 ```
@@ -133,10 +149,10 @@ mvn clean package -DskipTests
 java -jar target/yunjian-server-1.0-SNAPSHOT.jar
 ```
 
-服务默认监听 **8123** 端口，启动成功后可访问健康检查接口：
+服务默认监听 **8123** 端口，所有接口统一前缀 `/api/v1`（由 `server.servlet.context-path` 提供）。启动成功后可访问健康检查接口：
 
 ```bash
-curl http://localhost:8123/health
+curl http://localhost:8123/api/v1/health
 ```
 
 ---
@@ -178,10 +194,37 @@ curl http://localhost:8123/health
 
 ### 6.3 已有接口
 
+所有接口统一带 `/api/v1` 前缀，下表为完整路径。
+
 | 方法 | 路径 | 说明 | 返回 |
 |---|---|---|---|
-| GET | `/health` | 健康检查，用于部署探活 | `Result<String[]>` |
-| GET | `/test` | **临时调试端点**，用于验证全局异常处理，联调完成后应移除 | `Result<String>` |
+| GET | `/api/v1/health` | 健康检查，用于部署探活 | `Result<String[]>` |
+| POST | `/api/v1/auth/register` | 用户注册 | `Result<Void>` |
+| GET | `/api/v1/test` | **临时调试端点**，用于验证全局异常处理，联调完成后应移除 | `Result<String>` |
+
+**用户注册**
+
+请求体字段与校验规则：
+
+| 字段 | 类型 | 必填 | 校验规则 |
+|---|---|---|---|
+| `account` | String | 是 | 4–20 位，仅允许字母、数字、下划线；全局唯一 |
+| `username` | String | 是 | 2–20 位，昵称，允许重复 |
+| `password` | String | 是 | 6–20 位，入库前以 BCrypt 加盐哈希，**不存明文** |
+
+```bash
+curl -X POST http://localhost:8123/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"account":"yunjian_01","username":"云笺用户","password":"123456"}'
+```
+
+成功响应（`data` 为空，仅返回状态）：
+
+```json
+{ "success": true, "code": "00000", "msg": "success", "data": null }
+```
+
+账号已存在时返回业务错误码 `A0406`（该用户已注册），由 `GlobalExceptionHandler` 统一转换为 `Result`，不会抛 500。
 
 ---
 
@@ -221,9 +264,10 @@ curl http://localhost:8123/health
 **MySQL**
 
 - 【强制】表名、字段名必须使用小写字母或数字，禁止数字开头，禁止两个下划线中间只出现数字。
-- 【强制】表必备三字段：`id`、`gmt_create`、`gmt_modified`。
-- 【强制】数据库与表的字符集统一使用 `utf8mb4`。
+- 【强制】表必备三字段：`id`、`gmt_create`、`gmt_modified`。本项目建表字段命名为 `create_time`、`update_time`，语义与手册一致，由 `MyMetaObjectHandler` 自动填充。
 - 【强制】业务上具备唯一特性的字段，必须建成唯一索引，即便逻辑上已做控制。
+- 【强制】数据库与表的字符集统一使用 `utf8mb4`。
+- 【强制】唯一索引须覆盖真实业务约束：`im_user.account` 必须建唯一索引，否则并发注册时「先查后插」仍可能写入重复账号。
 - 【强制】超过三个表禁止 `join`；`count(*)` 为统计行数首选。
 - 逻辑删除字段统一为 `deleted`，`1` 为已删除、`0` 为未删除（由 MyBatis-Plus 全局配置生效）。
 
@@ -283,7 +327,9 @@ curl http://localhost:8123/health
 
 ## 10. 待办事项
 
-- [ ] 用户注册、登录与 JWT 鉴权
+- [x] 用户注册接口（BCrypt 加密、账号重复校验）
+- [ ] 用户登录与 JWT 鉴权（jjwt 依赖已引入）
+- [ ] `im_user.account` 建唯一索引，兜住并发注册
 - [ ] WebSocket 长连接、心跳与消息收发
 - [ ] 会话表、消息表设计与持久化
 - [ ] 补充单元测试（AIR 原则，覆盖率不低于 70%）
