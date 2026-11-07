@@ -44,3 +44,7 @@ application-local.yaml
 *.log
 logs/
 *.pid
+
+### 本地工具与工作区数据 ###
+.mcp.json
+.workbuddy/
