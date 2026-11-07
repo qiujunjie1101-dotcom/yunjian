@@ -1,11 +1,18 @@
 server:
   port: 8123
+  servlet:
+    context-path: /api/v1
 spring:
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/yunjian?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
     password: root # 换成你自己的
+  data:
+    redis:
+      port: 6379
+      database: 0
+      host: localhost
 mybatis-plus:
   configuration:
     # 控制台打印SQL
@@ -18,4 +25,3 @@ mybatis-plus:
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
-

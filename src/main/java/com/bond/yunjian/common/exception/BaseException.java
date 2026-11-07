@@ -22,19 +22,19 @@ public abstract class BaseException extends RuntimeException {
     /** 错误码枚举（便于日志与扩展） */
     private final ResultCode errorCode;
 
-    protected BaseException(ResultCode errorCode) {
+    public BaseException(ResultCode errorCode) {
         super(errorCode.getMsg());
         this.errorCode = errorCode;
         this.code = errorCode.getCode();
     }
 
-    protected BaseException(ResultCode errorCode, String msg) {
+    public BaseException(ResultCode errorCode, String msg) {
         super(msg);
         this.errorCode = errorCode;
         this.code = errorCode.getCode();
     }
 
-    protected BaseException(ResultCode errorCode, String msg, Throwable cause) {
+    public BaseException(ResultCode errorCode, String msg, Throwable cause) {
         super(msg, cause);
         this.errorCode = errorCode;
         this.code = errorCode.getCode();

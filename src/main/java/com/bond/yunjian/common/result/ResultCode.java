@@ -39,6 +39,7 @@ public enum ResultCode {
     USER_ACCOUNT_DISABLED("A0302", "用户账号已被禁用"),
     USER_NOT_FOUND("A0404", "用户不存在"),
     USER_REPEAT_SUBMIT("A0405", "请勿重复提交"),
+    USER_REGISTER_EXISTS("A0406", "该用户已注册"),
 
     // ==================== 当前系统错误 B ====================
     SYSTEM_ERROR("B0001", "系统内部错误，请稍后重试"),
