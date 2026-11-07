@@ -1,0 +1,21 @@
+server:
+  port: 8123
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/yunjian?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root # 换成你自己的
+mybatis-plus:
+  configuration:
+    # 控制台打印SQL
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 开启驼峰命名规则 数据库的username对应java的userName
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+    db-config: #逻辑删除配置 配合实体中 @TableLogic  需要和数据库中的字段对应
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
