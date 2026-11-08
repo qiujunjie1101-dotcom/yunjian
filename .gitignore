@@ -48,3 +48,20 @@ logs/
 ### 本地工具与工作区数据 ###
 .mcp.json
 .workbuddy/
+
+### 前端依赖与构建产物（web/.gitignore 亦有同名规则，此处兜底） ###
+node_modules/
+dist/
+
+### 备份与临时文件（禁止入库） ###
+*.bak
+*.orig
+*.rej
+*.tmp
+*.swp
+*~
+
+### 本地数据与缓存 ###
+dump.rdb
+*.rdb
+.cache/

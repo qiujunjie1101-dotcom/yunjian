@@ -35,15 +35,18 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
+          cache-dependency-path: server/pom.xml
 
       # 一条命令走完编译 -> 单元测试 -> 打包，任一环节失败立即中断
+      # pom.xml 已下沉到 server/，故指定工作目录
       - name: 编译 / 测试 / 打包
+        working-directory: server
         run: mvn -B -ntp verify
 
       - name: 上传构建产物
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: yunjian-server-${{ github.sha }}
-          path: target/*.jar
+          path: server/target/*.jar
           retention-days: 7
           if-no-files-found: error
