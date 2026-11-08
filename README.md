@@ -1,10 +1,10 @@
-# 云笺（YunJian）IM 服务端
+# 云笺（YunJian）IM
 
 [![CI](https://github.com/qiujunjie1101-dotcom/yunjian/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/qiujunjie1101-dotcom/yunjian/actions/workflows/ci.yml)
 
-基于 Spring Boot 3 的即时通讯（IM）服务端，采用前后端分离架构，对外提供 RESTful 接口与统一响应体。
+基于 Spring Boot 3 + Vue 3 的即时通讯（IM）项目，采用前后端分离架构：`server/` 为 Spring Boot 服务端，对外提供 RESTful 接口与统一响应体；`web/` 为 Vue 3 前端，负责用户交互。两者同属一个仓库（monorepo），共用同一套 CI 与文档。
 
-本项目参照《阿里巴巴 Java 开发手册》（嵩山版）的**命名规约、异常与日志规约、应用分层、MySQL 数据库规约**进行工程组织，所有新增代码须符合手册中的【强制】项。
+本项目服务端参照《阿里巴巴 Java 开发手册》（嵩山版）的**命名规约、异常与日志规约、应用分层、MySQL 数据库规约**进行工程组织，所有新增后端代码须符合手册中的【强制】项。
 
 ---
 
@@ -12,7 +12,7 @@
 
 云笺 IM 面向单聊与群聊场景，服务端承担用户账号、会话、消息、在线状态等核心能力。
 
-当前仓库为服务端主工程 `yunjian-server`，后续如需拆分客户端、网关等模块，可直接在同仓库下新增子模块，无需另建仓库。
+本仓库按「前后端分离、单仓双目录」组织：`server/` 是 Maven 主工程（artifactId 仍为 `yunjian-server`），`web/` 是 Vite 前端工程。后续如需新增网关、客户端等模块，直接在仓库根下平级新增目录即可，无需另建仓库。
 
 **当前进度**
 
@@ -24,7 +24,12 @@
 | 健康检查接口 | ✅ 已完成 |
 | CI 构建流水线 | ✅ 已完成 |
 | 用户注册接口（BCrypt 加密） | ✅ 已完成 |
-| 用户登录 / JWT 鉴权 | 🚧 规划中 |
+| 用户登录 / JWT 鉴权（Redis 会话白名单） | ✅ 已完成 |
+| 用户登出 / 当前用户资料查询 | ✅ 已完成 |
+| 开发与生产配置分离（profile） | ✅ 已完成 |
+| 前端工程骨架（Vue 3 + Vite） | ✅ 已完成 |
+| 前端注册页面与接口联调 | 🚧 开发中 |
+| 前端登录页面 | 🚧 规划中 |
 | WebSocket 长连接、消息收发 | 🚧 规划中 |
 | 会话与消息持久化 | 🚧 规划中 |
 
@@ -43,9 +48,13 @@
 | Hutool | 5.8.27 | 通用工具集 |
 | Lombok | 随 Boot 托管 | 简化 POJO |
 | spring-security-crypto | 随 Boot 托管 | 密码加密（BCrypt），不引入完整 Security 框架 |
-| Spring Data Redis | 随 Boot 托管 | 缓存与会话状态（模块开发中） |
-| JJWT | 0.11.5 | JWT 签发与校验（模块开发中） |
-| Maven | 3.9+ | 构建 |
+| Spring Data Redis | 随 Boot 托管 | 登录会话白名单，按 jti 维度存储 |
+| JJWT | 0.11.5 | JWT 签发与校验（HS256） |
+| Maven | 3.9+ | 构建（`server/`） |
+| Node.js | 22 LTS | 前端运行时与包管理（`web/`） |
+| Vue | 3.5.x | UI 框架（`web/`） |
+| Vite | 8.x | 开发服务器与构建工具（`web/`） |
+| @vitejs/plugin-vue | 6.x | 编译 `.vue` 单文件组件（`web/`） |
 
 ---
 
@@ -54,40 +63,40 @@
 遵循手册「工程结构 - 应用分层」规约：**Web 层只做参数校验与结果封装，业务逻辑下沉至 Service 层，数据库访问收敛在 DAO 层**，禁止跨层调用、禁止 Controller 直连 Mapper。
 
 ```
-yunjian-server
-├── .github/workflows/ci.yml          # GitHub Actions 构建流水线
-├── .gitattributes                    # 换行符统一（LF）
+yujian                                   # 仓库根（monorepo）
+├── .github/workflows/ci.yml             # GitHub Actions 构建流水线
+├── .gitattributes                       # 换行符统一（LF）
 ├── .gitignore
-├── pom.xml
-└── src/main
-    ├── java/com/bond/yunjian
-    │   ├── YunJianApplication.java   # 启动类
-    │   ├── common                    # 通用能力
-    │   │   ├── exception             # 异常体系
-    │   │   │   ├── BaseException.java        # 异常基类
-    │   │   │   ├── BizException.java         # 业务异常
-    │   │   │   ├── SystemException.java      # 系统异常
-    │   │   │   └── GlobalExceptionHandler.java # 全局异常处理
-    │   │   └── result                # 统一响应
-    │   │       ├── Result.java               # 响应封装
-    │   │       └── ResultCode.java           # 错误码枚举
-    │   ├── config                    # 框架配置
-    │   │   └── MyMetaObjectHandler.java      # 公共字段自动填充
-    │   ├── controller                # Web 层
-    │   │   ├── AuthController.java           # 认证：注册
-    │   │   └── HealthController.java         # 健康检查
-    │   ├── dto                       # 入参传输对象
-    │   │   └── UserRegisterDTO.java
-    │   ├── entity                    # 数据库实体（DO）
-    │   │   └── User.java
-    │   ├── mapper                    # DAO 层
-    │   │   └── UserMapper.java
-    │   ├── service                   # Service 层
-    │   │   ├── UserService.java
-    │   │   └── impl/UserServiceImpl.java
-    │   └── vo                        # 出参展示对象
-    └── resources
-        └── application.yml
+├── README.md
+├── server/                              # 后端：Spring Boot 3（Maven）
+│   ├── pom.xml
+│   └── src/main
+│       ├── java/com/bond/yunjian
+│       │   ├── YunJianApplication.java    # 启动类
+│       │   ├── common                     # 通用能力
+│       │   │   ├── constant               # 常量（鉴权请求头、Redis 键）
+│       │   │   ├── context                # 登录用户上下文（ThreadLocal）
+│       │   │   ├── exception              # 异常体系
+│       │   │   └── result                 # 统一响应
+│       │   ├── config                     # 框架配置（拦截器、密码编码器、字段填充）
+│       │   ├── controller                 # Web 层
+│       │   ├── dto                        # 入参传输对象
+│       │   ├── entity                     # 数据库实体（DO）
+│       │   ├── mapper                     # DAO 层
+│       │   ├── service                    # Service 层
+│       │   ├── utils                      # JWT 签发解析、令牌提取
+│       │   └── vo                         # 出参展示对象
+│       └── resources
+│           ├── application.yml            # 公共配置，默认激活 dev
+│           ├── application-dev.yml        # 开发：本机 MySQL/Redis，打印 SQL
+│           └── application-prod.yml       # 生产：敏感项全部走环境变量
+└── web/                                 # 前端：Vue 3 + Vite
+    ├── index.html                       # 浏览器唯一入口
+    ├── vite.config.js                   # 构建配置与开发代理
+    ├── package.json
+    └── src
+        ├── main.js                      # 应用入口，挂载到 #app
+        └── App.vue                      # 根组件
 ```
 
 **规划中的分层**（新增业务时按此建包，包名全小写、单数）：
@@ -106,9 +115,10 @@ yunjian-server
 
 ## 4. 环境要求
 
-- JDK 17 及以上
-- Maven 3.9 及以上
-- MySQL 8.0 及以上
+| 范围 | 要求 |
+|---|---|
+| 后端 `server/` | JDK 17+、Maven 3.9+、MySQL 8.0+、**Redis 5.0+**（登录会话依赖，未启动则登录和鉴权接口不可用） |
+| 前端 `web/` | Node.js 22 LTS 及以上（含 npm 10+） |
 
 ---
 
@@ -124,23 +134,46 @@ CREATE DATABASE IF NOT EXISTS yunjian
     COLLATE utf8mb4_general_ci;
 ```
 
-### 5.2 修改配置
+### 5.2 配置说明（开发 / 生产分离）
 
-编辑 `src/main/resources/application.yml`，将数据库账号密码改为本机环境：
+配置按 profile 拆成三个文件，公共项与敏感项彻底分开：
 
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/yunjian?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: root
-```
+| 文件 | 用途 | 内容 |
+|---|---|---|
+| `application.yml` | 公共 | 端口、`/api/v1` 前缀、MyBatis-Plus、JWT 有效期；默认激活 `dev` |
+| `application-dev.yml` | 本地开发 | MySQL/Redis 连 `localhost`、控制台打印 SQL、固定开发密钥 |
+| `application-prod.yml` | 生产部署 | 全部走环境变量，**缺失即启动失败**，不设默认值兜底 |
 
-> ⚠️ 仓库中的账号密码仅为本地开发占位。**请勿提交真实生产凭据**，多环境配置请使用 `application-local.yml`（已被 `.gitignore` 排除）或通过环境变量注入。
+本机开发无需设置任何环境变量，直接启动即为 `dev`。生产部署时设置 `SPRING_PROFILES_ACTIVE=prod` 并注入以下变量：
 
-### 5.3 启动
+| 变量 | 必需 | 说明 |
+|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | 是 | 固定为 `prod` |
+| `DB_URL` | 是 | JDBC 连接串 |
+| `DB_USERNAME` / `DB_PASSWORD` | 是 | 数据库账号与密码 |
+| `REDIS_HOST` | 是 | Redis 地址 |
+| `REDIS_PORT` / `REDIS_PASSWORD` / `REDIS_DATABASE` | 否 | 默认 `6379` / 空 / `0` |
+| `YUNJIAN_JWT_SECRET` | 是 | JWT 签名密钥，**长度不少于 32 字节**，可用 `openssl rand -base64 48` 生成 |
+
+> ⚠️ `YUNJIAN_JWT_SECRET` 一旦泄露，任何人都能伪造任意用户令牌。该值不写进任何提交文件，只在部署环境注入。
+
+生产启动示例（Linux 服务器）：
 
 ```bash
+SPRING_PROFILES_ACTIVE=prod \
+DB_URL='jdbc:mysql://127.0.0.1:3306/yunjian?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai' \
+DB_USERNAME=yunjian DB_PASSWORD='***' \
+REDIS_HOST=127.0.0.1 YUNJIAN_JWT_SECRET='***' \
+java -jar yunjian-server-1.0-SNAPSHOT.jar
+```
+
+
+### 5.3 启动后端
+
+```bash
+# 所有 Maven 命令都在 server/ 目录下执行
+cd server
+
 # 方式一：直接运行
 mvn spring-boot:run
 
@@ -154,6 +187,19 @@ java -jar target/yunjian-server-1.0-SNAPSHOT.jar
 ```bash
 curl http://localhost:8123/api/v1/health
 ```
+
+> 登录与鉴权依赖 Redis。本机已将 Redis 注册为 Windows 服务（服务名 `Redis`，启动类型自动），可用 `Get-Service Redis` 确认状态；未启动时登录会返回 `B0302` 缓存服务异常。
+
+### 5.4 启动前端
+
+```bash
+# 所有 npm 命令都在 web/ 目录下执行
+cd web
+npm install
+npm run dev
+```
+
+前端开发服务器默认监听 `http://localhost:5173`。前端与后端端口不同，联调时需在 `web/vite.config.js` 配置 `server.proxy`，把 `/api/v1` 转发到 `http://localhost:8123`（待接入）。生产构建使用 `npm run build`，产物输出到 `web/dist/`。
 
 ---
 
@@ -196,11 +242,24 @@ curl http://localhost:8123/api/v1/health
 
 所有接口统一带 `/api/v1` 前缀，下表为完整路径。
 
-| 方法 | 路径 | 说明 | 返回 |
-|---|---|---|---|
-| GET | `/api/v1/health` | 健康检查，用于部署探活 | `Result<String[]>` |
-| POST | `/api/v1/auth/register` | 用户注册 | `Result<Void>` |
-| GET | `/api/v1/test` | **临时调试端点**，用于验证全局异常处理，联调完成后应移除 | `Result<String>` |
+| 方法 | 路径 | 鉴权 | 说明 | 返回 |
+|---|---|---|---|---|
+| GET | `/api/v1/health` | 免 | 健康检查，用于部署探活 | `Result<String[]>` |
+| POST | `/api/v1/auth/register` | 免 | 用户注册 | `Result<Void>` |
+| POST | `/api/v1/auth/login` | 免 | 用户登录，返回访问令牌 | `Result<UserLoginVO>` |
+| POST | `/api/v1/auth/logout` | 需 | 注销当前令牌对应的会话 | `Result<Void>` |
+| GET | `/api/v1/user/info` | 需 | 当前登录用户资料 | `Result<UserInfoVO>` |
+| GET | `/api/v1/test` | 免 | **临时调试端点**，联调完成后应移除 | `Result<String>` |
+
+**鉴权机制**
+
+登录成功后返回 JWT，后续请求放在请求头：`Authorization: Bearer <token>`。校验链路为「验签 → 查 Redis 会话白名单 → 写入当前用户上下文」，两道都通过才放行。
+
+- 令牌本身有效期 7200 秒（`yunjian.jwt.expire-seconds`），Redis 会话键 `yunjian:login:token:{userId}:{jti}` 的 TTL 与之同源。
+- 登出会把会话键删掉，**令牌即使还没过期也会立即失效**，这是白名单机制相比纯 JWT 的价值。
+- 同一账号多端登录会生成多个 `jti`，各自独立有效；踢下线需额外实现，目前未做。
+- 错误码：令牌过期或会话不存在返回 `A0201`，令牌非法/被篡改返回 `A0203`。
+
 
 **用户注册**
 
@@ -225,6 +284,37 @@ curl -X POST http://localhost:8123/api/v1/auth/register \
 ```
 
 账号已存在时返回业务错误码 `A0406`（该用户已注册），由 `GlobalExceptionHandler` 统一转换为 `Result`，不会抛 500。
+
+**用户登录**
+
+```bash
+curl -X POST http://localhost:8123/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"account":"yunjian_01","password":"123456"}'
+```
+
+成功响应（`data` 只含令牌信息，用户资料走 `/user/info` 单独获取）：
+
+```json
+{
+  "success": true,
+  "code": "00000",
+  "msg": "success",
+  "data": { "token": "eyJhbGciOi...", "tokenType": "Bearer", "expiresIn": 7200 }
+}
+```
+
+账号不存在与密码错误返回同一错误码 `A0202`，不区分二者，避免账号被枚举探测。
+
+**当前用户资料**
+
+```bash
+curl http://localhost:8123/api/v1/user/info \
+  -H "Authorization: Bearer <token>"
+```
+
+返回 `id / account / username / avatar / signature / gender / lastLoginTime`。用户 ID 取自登录上下文，不接受外部传参，因此不存在水平越权修改他人资料的可能。
+
 
 ---
 
@@ -317,7 +407,9 @@ curl -X POST http://localhost:8123/api/v1/auth/register \
 - 向 `main` 提交 Pull Request
 - 手动 `workflow_dispatch` 触发
 
-流水线行为：检出代码 → 安装 JDK 17（Maven 依赖缓存）→ `mvn -B -ntp verify`（编译、单元测试、打包，任一环节失败立即中断）→ 上传 `target/*.jar` 为构建产物（保留 7 天）。
+流水线行为：检出代码 → 安装 JDK 17（Maven 依赖缓存，缓存键依据 `server/pom.xml`）→ 在 `server/` 工作目录执行 `mvn -B -ntp verify`（编译、单元测试、打包，任一环节失败立即中断）→ 上传 `server/target/*.jar` 为构建产物（保留 7 天）。
+
+> 前端 `web/` 暂未接入 CI；后续接入时可在同一 workflow 中增加独立 job，避免与后端构建互相阻塞。
 
 安全约定：所有 action 以 **commit SHA 锁定**（版本见注释）；工作流权限收敛为 `contents: read`；同一分支连续推送时自动取消上一次未完成的运行，避免浪费额度。
 
@@ -328,8 +420,11 @@ curl -X POST http://localhost:8123/api/v1/auth/register \
 ## 10. 待办事项
 
 - [x] 用户注册接口（BCrypt 加密、账号重复校验）
-- [ ] 用户登录与 JWT 鉴权（jjwt 依赖已引入）
+- [x] 用户登录 / JWT 鉴权 / 登出（Redis 会话白名单）
+- [x] 开发与生产配置分离，生产凭据全部走环境变量
 - [ ] `im_user.account` 建唯一索引，兜住并发注册
+- [ ] 登录失败次数限制，防暴力破解
+- [ ] 前端注册页与登录页接口联调
 - [ ] WebSocket 长连接、心跳与消息收发
 - [ ] 会话表、消息表设计与持久化
 - [ ] 补充单元测试（AIR 原则，覆盖率不低于 70%）
